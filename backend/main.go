@@ -1,16 +1,20 @@
 package main
 
 import (
+	"fmt"
 	db "investment_tracker/database"
-	// "github.com/gin-gonic/gin"
+	"investment_tracker/routes"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	// fmt.Println("Database connection established")
 
-	// r := gin.Default()
+	r := gin.Default()
 	db.InitDB()
-
-	// r.Run("8080")
+	fmt.Println(db.DB)
+	routes.SetupRoutes(r)
+	r.Run("localhost:8080")
 
 }

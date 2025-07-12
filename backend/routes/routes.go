@@ -1,10 +1,12 @@
 package routes
 
 import (
+	"investment_tracker/controllers"
+
 	"github.com/gin-gonic/gin"
 )
 
-func setupRoutes(r *gin.Engine) {
-	//r.GET("/accounts", getAccounts)
+func SetupRoutes(r *gin.Engine) {
+	r.POST("/signup", controllers.PostSignup)
 
 }

@@ -5,6 +5,7 @@ import (
 
 	// Importing the sqlite3 driver
 	"database/sql"
+	"fmt"
 	"investment_tracker/models"
 	"log"
 
@@ -15,7 +16,8 @@ import (
 var DB *sql.DB
 
 func InitDB() {
-	DB, err := sql.Open("sqlite3", "database/tracker.db")
+	var err error
+	DB, err = sql.Open("sqlite3", "database/tracker.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -32,4 +34,9 @@ func InitDB() {
 	models.CreateSalaryTable(DB)
 
 	// fmt.Println("Hey this from db")
+	fmt.Println(DB)
+}
+
+func GetDB() {
+	fmt.Println(DB)
 }

@@ -5,46 +5,46 @@ import (
 	"fmt"
 )
 
-type user struct {
-	id        int    `json:"id"`
-	name      string `json:"name"`
-	email     string `json:"email"`
-	password  string `json:"password"`
-	birthdate string `json:"birthdate"`
+type User struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	Birthyear int    `json:"birthyear"`
 }
 
-type account struct {
-	id              int     `json:"id"`
-	user_id         int     `json:"user_id"`
-	account_type_id int     `json:"account_type_id"`
-	total           float64 `json:"total"`
+type Account struct {
+	Id              int     `json:"id"`
+	User_id         int     `json:"user_id"`
+	Account_type_id int     `json:"account_type_id"`
+	Total           float64 `json:"total"`
 }
 
-type contribution struct {
-	id         int     `json:"id"`
-	account_id int     `json:"account_id"`
-	amount     float64 `json:"amount"`
-	year       int     `json:"date"`
+type Contribution struct {
+	Id         int     `json:"id"`
+	Account_id int     `json:"account_id"`
+	Amount     float64 `json:"amount"`
+	Year       int     `json:"date"`
 }
-type cumulative_contribution struct {
-	id         int     `json:"id"`
-	account_id int     `json:"account_id"`
-	amount     float64 `json:"amount"`
-}
-
-type grant_cumulative struct {
-	id           int `json:"id"`
-	account_id   int `json:"account_id"`
-	grant_earned int `json:"grant_earned"`
-	grant_unused int `json:"grant_unused"`
+type Cumulative_contribution struct {
+	Id         int     `json:"id"`
+	Account_id int     `json:"account_id"`
+	Amount     float64 `json:"amount"`
 }
 
-type salary struct {
-	id         int     `json:"id"`
-	user_id    int     `json:"user_id"`
-	amount     float64 `json:"amount"`
-	start_year int     `json:"start_year"`
-	end_year   int     `json:"end_year"`
+type Grant_cumulative struct {
+	Id           int `json:"id"`
+	Account_id   int `json:"account_id"`
+	Grant_earned int `json:"grant_earned"`
+	Grant_unused int `json:"grant_unused"`
+}
+
+type Salary struct {
+	Id         int     `json:"id"`
+	User_id    int     `json:"user_id"`
+	Amount     float64 `json:"amount"`
+	Start_year int     `json:"start_year"`
+	End_year   int     `json:"end_year"`
 }
 
 func CreateUserTable(DB *sql.DB) {
