@@ -1,20 +1,24 @@
 package main
 
 import (
-	"fmt"
+	"investment_tracker/initializer"
+
 	db "investment_tracker/database"
+
 	"investment_tracker/routes"
 
 	"github.com/gin-gonic/gin"
 )
 
-func main() {
-	// fmt.Println("Database connection established")
-
-	r := gin.Default()
+func init() {
 	db.InitDB()
-	fmt.Println(db.DB)
-	routes.SetupRoutes(r)
-	r.Run("localhost:8080")
+	initializer.LoadEnvVariables()
 
+}
+
+func main() {
+	router := gin.Default()
+	routes.SetupRoutes(router)
+
+	router.Run("localhost:8080")
 }
