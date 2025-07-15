@@ -24,7 +24,7 @@ type Contribution struct {
 	Id         int     `json:"id"`
 	Account_id int     `json:"account_id"`
 	Amount     float64 `json:"amount"`
-	Year       int     `json:"date"`
+	Year       int     `json:"year"`
 }
 type Cumulative_contribution struct {
 	Id         int     `json:"id"`
@@ -85,7 +85,7 @@ func CreateAccountTable(DB *sql.DB) {
 func CreateContributionTable(DB *sql.DB) {
 	_, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS contributions (
-			id SERIAL PRIMARY KEY,
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			account_id INTEGER REFERENCES accounts(id),
 			amount REAL NOT NULL,
 			year INTEGER NOT NULL
