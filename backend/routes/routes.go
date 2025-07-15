@@ -18,7 +18,7 @@ func SetupRoutes(router *gin.Engine) {
 	router.POST("/accounts", middleware.Authentication, controllers.CreateAccount)
 	router.DELETE("/accounts/:id", middleware.Authentication, controllers.DeleteAccount)
 	// Contribution routes
-	router.POST("accounts/contribution/:id", middleware.Authentication, controllers.CreateContribution)
+	router.POST("accounts/contribution/:id", middleware.Authentication, controllers.UpdateContribution)
 	router.GET("accounts/contribution/:id", middleware.Authentication, controllers.GetContributions)
 
 }

@@ -77,12 +77,16 @@ func CreateAccount(c *gin.Context) {
 		return
 	}
 	statement, _ := db.DB.Prepare("INSERT INTO accounts (user_id,account_type_id,total) VALUES (?, ?, ?)")
-	_, err = statement.Exec(userID, account.Account_type_id, account.Total)
+	result, err := statement.Exec(userID, account.Account_type_id, account.Total)
+	accountID, _ := result.LastInsertId()
+	account.Id = int(accountID)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create account"})
 		return
 	}
+	CreateContribution(*account, *user.(*models.User))
+
 	c.JSON(201, gin.H{"message": "Account created successfully"})
 
 }

@@ -26,13 +26,20 @@ type Contribution struct {
 	Amount     float64 `json:"amount"`
 	Year       int     `json:"year"`
 }
-type Cumulative_contribution struct {
+type CumulativeContribution struct {
 	Id         int     `json:"id"`
 	Account_id int     `json:"account_id"`
 	Amount     float64 `json:"amount"`
+	Year       int     `json:"year"`
+}
+type ContributionLimit struct {
+	Id              int     `json:"id"`
+	Account_type_id int     `json:"account_type_id"`
+	Amount          float64 `json:"amount"`
+	Year            int     `json:"year"`
 }
 
-type Grant_cumulative struct {
+type GrantCumulative struct {
 	Id           int `json:"id"`
 	Account_id   int `json:"account_id"`
 	Grant_earned int `json:"grant_earned"`
@@ -101,7 +108,8 @@ func CreateCumulativeContributionTable(DB *sql.DB) {
 		CREATE TABLE IF NOT EXISTS cumulative_contributions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			account_id INTEGER REFERENCES accounts(id),
-			amount REAL NOT NULL
+			amount REAL NOT NULL,
+			year INTEGER NOT NULL
 		);
 	`)
 	if err != nil {
