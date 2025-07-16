@@ -18,6 +18,7 @@ type Account struct {
 	User_id         int     `json:"user_id"`
 	Account_type_id int     `json:"account_type_id"`
 	Total           float64 `json:"total"`
+	Child_year      int     `json:"child_year"`
 }
 
 type Contribution struct {
@@ -79,7 +80,8 @@ func CreateAccountTable(DB *sql.DB) {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL REFERENCES users(id),
 			account_type_id INTEGER REFERENCES account_types(id),
-			total REAL NOT NULL
+			total REAL NOT NULL,
+			child_year INTEGER NOT NULL
 
 		);
 	`)

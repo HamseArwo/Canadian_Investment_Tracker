@@ -23,9 +23,9 @@ func GetAccounts(c *gin.Context) {
 
 	for rows.Next() {
 		var account models.Account
-		err := rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total)
+		err := rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total, &account.Child_year)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to scan account"})
+			c.JSON(500, gin.H{"error": account.Child_year})
 			return
 		}
 		accountList = append(accountList, account)
@@ -73,11 +73,11 @@ func CreateAccount(c *gin.Context) {
 	err := c.BindJSON(account)
 
 	if err != nil {
-		c.JSON(400, gin.H{"error": "Failed to receive asdasdccount"})
+		c.JSON(400, gin.H{"error": "Failed to receive account"})
 		return
 	}
-	statement, _ := db.DB.Prepare("INSERT INTO accounts (user_id,account_type_id,total) VALUES (?, ?, ?)")
-	result, err := statement.Exec(userID, account.Account_type_id, account.Total)
+	statement, _ := db.DB.Prepare("INSERT INTO accounts (user_id,account_type_id,total,child_year) VALUES (?, ?, ?, ?)")
+	result, err := statement.Exec(userID, account.Account_type_id, account.Total, account.Child_year)
 	accountID, _ := result.LastInsertId()
 	account.Id = int(accountID)
 
@@ -85,7 +85,11 @@ func CreateAccount(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to create account"})
 		return
 	}
-	CreateContribution(*account, *user.(*models.User))
+	err = CreateContribution(*account, *user.(*models.User))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, "Failed to create contributions")
+		return
+	}
 
 	c.JSON(201, gin.H{"message": "Account created successfully"})
 

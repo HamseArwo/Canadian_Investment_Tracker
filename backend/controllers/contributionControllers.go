@@ -10,27 +10,43 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CreateContribution(account models.Account, user models.User) {
-	var year int
-	if user.Birthyear+18 < 2005 {
-		year = 2005
+func CreateContribution(account models.Account, user models.User) error {
+	var start_year int
+	if account.Account_type_id == 2 {
+		if account.Child_year == 0 {
+			return errors.New("Child year not set")
+		}
+		start_year = account.Child_year
+		statement, _ := db.DB.Prepare("INSERT INTO cumulative_grants (account_id, grant_earned, grant_unused) VALUES (?, ?, ?)")
+		_, err := statement.Exec(account.Id, 0, 500*(2025-start_year))
+		if err != nil {
+			return err
+		}
+
+	} else if account.Account_type_id == 1 {
+		start_year = max(user.Birthyear+18, 2005)
 	} else {
-		year = user.Birthyear + 18
-	}
-	for year < 2026 {
-		statement, _ := db.DB.Prepare("INSERT INTO contributions (account_id, amount, year) VALUES (?, ?, ?)")
-		_, err := statement.Exec(account.Id, 0, year)
-		if err != nil {
-			return
-		}
-		statement, _ = db.DB.Prepare("INSERT INTO cumulative_contributions (account_id, amount, year) VALUES (?, ?, ?)")
-		_, err = statement.Exec(account.Id, 0, year)
-		if err != nil {
-			return
-		}
-		year++
+		start_year = user.Birthyear + 18
 	}
 
+	for start_year < 2026 {
+		statement, _ := db.DB.Prepare("INSERT INTO contributions (account_id, amount, year) VALUES (?, ?, ?)")
+		_, err := statement.Exec(account.Id, 0, start_year)
+		if err != nil {
+			return err
+		}
+
+		if account.Account_type_id == 1 || account.Account_type_id == 3 {
+			statement, _ = db.DB.Prepare("INSERT INTO cumulative_contributions (account_id, amount, year) VALUES (?, ?, ?)")
+			_, err = statement.Exec(account.Id, 0, start_year)
+			if err != nil {
+				return err
+			}
+		}
+		start_year++
+
+	}
+	return nil
 }
 
 func GetContributions(c *gin.Context) {
@@ -64,7 +80,7 @@ func DeleteContribution(c *gin.Context) {
 func UpdateContribution(c *gin.Context) {
 	var contri = new(models.Contribution)
 	var account models.Account
-	var oldValue float64
+	var oldValue float64 = 1
 	var oldTotal float64
 
 	accountId := c.Param("id")
@@ -77,7 +93,7 @@ func UpdateContribution(c *gin.Context) {
 		return
 	}
 	for rows.Next() {
-		rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total)
+		rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total, &account.Child_year)
 	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
@@ -114,10 +130,19 @@ func UpdateContribution(c *gin.Context) {
 		return
 	}
 
-	err = calculateCumulativeContribution(accountId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Intsdsadernal server error"})
-		return
+	if account.Account_type_id == 1 || account.Account_type_id == 3 {
+		err := calculateCumulativeContribution(accountId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+	} else {
+		err := calculateGrantContribution(accountId, oldValue, contri.Amount)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Contribution created successfully"})
@@ -142,6 +167,13 @@ func ValidateContribution(contribution *models.Contribution, account *models.Acc
 		} else if contribution.Amount == cumulative_contributions {
 
 			return nil
+		}
+
+		// RESP CALCULATION
+	} else if account.Account_type_id == 2 {
+		if account.Total+contribution.Amount > 50000 {
+			err := errors.New("Contribution limit exceeded")
+			return err
 		}
 
 	}
@@ -238,4 +270,33 @@ func calculateCumulativeContribution(accountID string) error {
 	}
 
 	return tx.Commit()
+}
+
+func calculateGrantContribution(accountID string, oldValue float64, newValue float64) error {
+	// grantUsed := db.DB.QueryRow("SELECT grant_unused FROM cumulative_grants WHERE account_id = ?", accountID)
+	var grantEarned float64
+	var grantUnused float64
+	oldGrantEarned := min(500, oldValue*0.20)
+	newGrantEarned := min(500, newValue*0.20)
+	fmt.Println(oldGrantEarned, newGrantEarned)
+
+	oldGrantUnused := 500 - oldGrantEarned
+	newGrantUnused := 500 - newGrantEarned
+	fmt.Println(oldGrantUnused, newGrantUnused)
+
+	err1 := db.DB.QueryRow("SELECT grant_earned FROM cumulative_grants WHERE account_id = ?", accountID).Scan(&grantEarned)
+	err2 := db.DB.QueryRow("SELECT grant_unused FROM cumulative_grants WHERE account_id = ?", accountID).Scan(&grantUnused)
+	if err1 != nil || err2 != nil {
+		return err1
+	}
+	fmt.Println(grantEarned, grantUnused)
+	grantEarned = grantEarned - oldGrantEarned + newGrantEarned
+	grantUnused = grantUnused - oldGrantUnused + newGrantUnused
+
+	_, err := db.DB.Exec("UPDATE cumulative_grants SET grant_earned = ?, grant_unused = ? WHERE account_id = ?", grantEarned, grantUnused, accountID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
