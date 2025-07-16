@@ -27,10 +27,11 @@ type Contribution struct {
 	Year       int     `json:"year"`
 }
 type CumulativeContribution struct {
-	Id         int     `json:"id"`
-	Account_id int     `json:"account_id"`
-	Amount     float64 `json:"amount"`
-	Year       int     `json:"year"`
+	Id                       int     `json:"id"`
+	Account_id               int     `json:"account_id"`
+	Amount                   float64 `json:"amount"`
+	Year                     int     `json:"year"`
+	Over_contribution_amount float64 `json:"over_contribution_amount"`
 }
 type ContributionLimit struct {
 	Id              int     `json:"id"`

@@ -69,7 +69,7 @@ func UpdateContribution(c *gin.Context) {
 
 	accountId := c.Param("id")
 	err := c.BindJSON(contri)
-	fmt.Println(accountId)
+
 	statement, _ := db.DB.Prepare("SELECT * FROM accounts WHERE id = ?")
 	rows, err := statement.Query(accountId)
 	if err != nil {
@@ -95,9 +95,17 @@ func UpdateContribution(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}
-	err = db.DB.QueryRow("SELECT total FROM accounts WHERE id = ?", accountId).Scan(&oldTotal)
-	fmt.Println(oldTotal, oldValue, contri.Amount)
-	newTotal := oldTotal + (contri.Amount - oldValue)
+	if oldValue != contri.Amount {
+		err = db.DB.QueryRow("SELECT total FROM accounts WHERE id = ?", accountId).Scan(&oldTotal)
+		newTotal := oldTotal + (contri.Amount - oldValue)
+		statement, _ = db.DB.Prepare("UPDATE accounts SET total = ? WHERE id = ?")
+		_, err = statement.Exec(newTotal, accountId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			return
+		}
+
+	}
 
 	statement, _ = db.DB.Prepare("UPDATE contributions SET amount = ? WHERE year = ?")
 	_, err = statement.Exec(contri.Amount, contri.Year)
@@ -105,13 +113,8 @@ func UpdateContribution(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
-	statement, _ = db.DB.Prepare("UPDATE accounts SET total = ? WHERE id = ?")
-	_, err = statement.Exec(newTotal, accountId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
-	err = calculateCumulativeContribution(accountId, contri.Year)
+
+	err = calculateCumulativeContribution(accountId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Intsdsadernal server error"})
 		return
@@ -124,23 +127,19 @@ func ValidateContribution(contribution *models.Contribution, account *models.Acc
 
 	//  TFSA Calculations
 	if account.Account_type_id == 1 {
-		cumulative_contributions, err := getContributionCumulative(account.Id)
-		if err != nil {
-			return err
-		}
-		// contrtibution limit of that year
-		// compare contrbutions if greater than limit cancel if equal to the limit add if less then limit added to culnmative
-		contribution_limit, err := getContributionLimit(contribution.Year)
-		if err != nil {
-			return err
-		}
+		oldValue := 0.0
 
-		if contribution.Amount > contribution_limit.Amount+cumulative_contributions.Amount {
-			err := errors.New("Contribution limit exceeded")
-			fmt.Print(cumulative_contributions.Amount)
+		cumulative_contributions, err := getContributionCumulative(account.Id, contribution.Year)
+		if err != nil {
 			return err
-		} else if contribution.Amount == contribution_limit.Amount+cumulative_contributions.Amount {
-			fmt.Print("Bye")
+		}
+		_ = db.DB.QueryRow("SELECT amount FROM contributions WHERE year = ?", contribution.Year).Scan(&oldValue)
+
+		if contribution.Amount > cumulative_contributions+oldValue {
+			err := errors.New("Contribution limit exceeded")
+			fmt.Print(cumulative_contributions)
+			return err
+		} else if contribution.Amount == cumulative_contributions {
 
 			return nil
 		}
@@ -149,40 +148,26 @@ func ValidateContribution(contribution *models.Contribution, account *models.Acc
 	return nil
 
 }
-func getContributionLimit(year int) (models.ContributionLimit, error) {
-	var contributionLimit models.ContributionLimit
 
-	statement, _ := db.DB.Prepare("SELECT * FROM contribution_limit WHERE year = ?")
-	rows, err := statement.Query(year)
+func getContributionCumulative(accountId int, year int) (float64, error) {
+	var amount float64
+	err := db.DB.QueryRow("SELECT amount FROM cumulative_contributions WHERE account_id = ? AND year = ?", accountId, year).Scan(&amount)
 	if err != nil {
-		return contributionLimit, err
+		return amount, err
 	}
-	for rows.Next() {
-		rows.Scan(&contributionLimit.Id, &contributionLimit.Account_type_id, &contributionLimit.Amount, &contributionLimit.Year)
-	}
-	return contributionLimit, nil
-}
-func getContributionCumulative(accountId int) (models.CumulativeContribution, error) {
-	var contributionCumulative models.CumulativeContribution
+	return amount, nil
 
-	statement, _ := db.DB.Prepare("SELECT * FROM cumulative_contributions WHERE account_id = ?")
-	rows, err := statement.Query(accountId)
-	if err != nil {
-		return contributionCumulative, err
-	}
-	for rows.Next() {
-		rows.Scan(&contributionCumulative.Id, &contributionCumulative.Account_id, &contributionCumulative.Amount, &contributionCumulative.Year)
-	}
-	return contributionCumulative, nil
 }
 
-func calculateCumulativeContribution(accountID string, contributionYear int) error {
+func calculateCumulativeContribution(accountID string) error {
+	// Step 1: Fetch all contribution limits
+
 	limitQuery := "SELECT year, contribute_limit FROM contribution_limit WHERE account_type_id = 1"
 	limitRows, err := db.DB.Query(limitQuery)
 	if err != nil {
-		fmt.Println("hello world")
 		return err
 	}
+
 	contributionLimits := make(map[int]float64)
 	for limitRows.Next() {
 		var year int
@@ -193,6 +178,7 @@ func calculateCumulativeContribution(accountID string, contributionYear int) err
 		contributionLimits[year] = amount
 	}
 
+	// Step 2: Fetch all contributions for account
 	contributionQuery := "SELECT year, amount FROM contributions WHERE account_id = ?"
 	contributionRows, err := db.DB.Query(contributionQuery, accountID)
 	if err != nil {
@@ -208,29 +194,48 @@ func calculateCumulativeContribution(accountID string, contributionYear int) err
 		contributions[year] = amount
 	}
 
+	// Step 3: Calculate cumulative and track over-contributions
 	cumulative := make(map[int]float64)
-	for year := contributionYear; year <= 2025; year++ {
-		contribution := contributions[year]
+	overContributions := make(map[int]float64)
+
+	for year := 2024; year <= 2025; year++ {
+		var prevCumulative float64
+		if year > 2024 {
+			prevCumulative = cumulative[year-1]
+		}
 		limit := contributionLimits[year]
-		cumulative[year+1] = cumulative[year] + (limit - contribution)
+		contribution := contributions[year]
+
+		newCumulative := prevCumulative + (limit - contribution)
+		cumulative[year] = newCumulative
+
+		if contribution > prevCumulative+limit {
+			overContributions[year] = contribution - (prevCumulative + limit)
+		} else {
+			overContributions[year] = 0
+		}
+		if cumulative[year] < 0 {
+			cumulative[year] = contribution + cumulative[year]
+		}
 	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare("UPDATE cumulative_contributions SET amount = ? WHERE account_id = ? AND year = ?")
+	stmt, err := tx.Prepare("UPDATE cumulative_contributions SET amount = ?, over_contribution_amount = ? WHERE account_id = ? AND year = ?")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	for year, amount := range cumulative {
-		_, err := stmt.Exec(amount, accountID, year)
+	for year := 2024; year <= 2025; year++ {
+		_, err := stmt.Exec(cumulative[year], overContributions[year], accountID, year)
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
+
 	return tx.Commit()
 }
