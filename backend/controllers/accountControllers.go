@@ -19,6 +19,7 @@ func GetAccounts(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to query accounts"})
 		return
 	}
+	defer rows.Close()
 	var accountList []models.Account
 
 	for rows.Next() {
@@ -50,6 +51,7 @@ func GetAccount(c *gin.Context) {
 		c.JSON(http.StatusNotFound, "Query failed")
 		return
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total)
@@ -98,10 +100,23 @@ func CreateAccount(c *gin.Context) {
 func DeleteAccount(c *gin.Context) {
 	// Implementation goes here
 	id := c.Param("id")
-	statement, _ := db.DB.Prepare("DELETE FROM accounts WHERE id = ?")
-	_, err := statement.Exec(id)
+	var accountType int
+	var err2 error = nil
+	var err3 error = nil
 
-	if err != nil {
+	db.DB.QueryRow("SELECT account_type_id FROM accounts WHERE id = ?", id).Scan(&accountType)
+	_, err1 := db.DB.Exec("DELETE FROM contributions WHERE account_id = ?", id)
+
+	if accountType == 2 {
+		_, err3 = db.DB.Exec("DELETE FROM cumulative_grants WHERE id = ?", id)
+	} else {
+		_, err2 = db.DB.Exec("DELETE FROM cumulative_contributions WHERE account_id = ?", id)
+
+	}
+
+	_, err4 := db.DB.Exec("DELETE FROM accounts WHERE id = ?", id)
+
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 		c.JSON(http.StatusNotFound, "Query failed")
 		return
 	}

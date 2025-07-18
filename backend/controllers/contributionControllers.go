@@ -5,12 +5,15 @@ import (
 	"fmt"
 	db "investment_tracker/database"
 	"investment_tracker/models"
+	"math"
 	"net/http"
+	"sort"
 
 	"github.com/gin-gonic/gin"
 )
 
 func CreateContribution(account models.Account, user models.User) error {
+
 	var start_year int
 	if account.Account_type_id == 2 {
 		if account.Child_year == 0 {
@@ -30,9 +33,11 @@ func CreateContribution(account models.Account, user models.User) error {
 	}
 
 	for start_year < 2026 {
-		statement, _ := db.DB.Prepare("INSERT INTO contributions (account_id, amount, year) VALUES (?, ?, ?)")
-		_, err := statement.Exec(account.Id, 0, start_year)
+		statement, _ := db.DB.Prepare("INSERT INTO contributions (account_id,user_id,amount, year) VALUES (?, ?, ?, ?)")
+		fmt.Println(start_year)
+		_, err := statement.Exec(account.Id, user.Id, 0, start_year)
 		if err != nil {
+
 			return err
 		}
 
@@ -46,23 +51,33 @@ func CreateContribution(account models.Account, user models.User) error {
 		start_year++
 
 	}
+	if account.Account_type_id == 1 || account.Account_type_id == 3 {
+		err := calculateCumulativeContribution(string(account.Id), account.Account_type_id, user.Id, user.Birthyear)
+		if err != nil {
+			return err
+		}
+
+	}
 	return nil
 }
 
 func GetContributions(c *gin.Context) {
 	accountId := c.Param("id")
+	user, _ := c.Get("user")
+	userID := user.(*models.User).Id
 	var contributionList []models.Contribution
 
-	statement, _ := db.DB.Prepare("SELECT * FROM contributions WHERE account_id = ?")
-	rows, err := statement.Query(accountId)
+	statement, _ := db.DB.Prepare("SELECT * FROM contributions WHERE account_id = ? AND user_id = ?")
+	rows, err := statement.Query(accountId, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
 		return
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var contribution models.Contribution
-		rows.Scan(&contribution.Id, &contribution.Account_id, &contribution.Amount, &contribution.Year)
+		rows.Scan(&contribution.Id, &contribution.User_id, &contribution.Account_id, &contribution.Amount, &contribution.Year)
 		contributionList = append(contributionList, contribution)
 	}
 
@@ -82,6 +97,9 @@ func UpdateContribution(c *gin.Context) {
 	var account models.Account
 	var oldValue float64 = 1
 	var oldTotal float64
+	user, _ := c.Get("user")
+	Birthyear := user.(*models.User).Birthyear
+	userID := user.(*models.User).Id
 
 	accountId := c.Param("id")
 	err := c.BindJSON(contri)
@@ -92,6 +110,8 @@ func UpdateContribution(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total, &account.Child_year)
 	}
@@ -131,9 +151,9 @@ func UpdateContribution(c *gin.Context) {
 	}
 
 	if account.Account_type_id == 1 || account.Account_type_id == 3 {
-		err := calculateCumulativeContribution(accountId)
+		err := calculateCumulativeContribution(accountId, account.Account_type_id, userID, Birthyear)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal this one ?server error"})
 			return
 		}
 	} else {
@@ -151,7 +171,7 @@ func UpdateContribution(c *gin.Context) {
 func ValidateContribution(contribution *models.Contribution, account *models.Account) error {
 
 	//  TFSA Calculations
-	if account.Account_type_id == 1 {
+	if account.Account_type_id == 1 || account.Account_type_id == 3 {
 		oldValue := 0.0
 
 		cumulative_contributions, err := getContributionCumulative(account.Id, contribution.Year)
@@ -176,6 +196,7 @@ func ValidateContribution(contribution *models.Contribution, account *models.Acc
 			return err
 		}
 
+		// RRSP CALCULATION
 	}
 	return nil
 
@@ -191,31 +212,65 @@ func getContributionCumulative(accountId int, year int) (float64, error) {
 
 }
 
-func calculateCumulativeContribution(accountID string) error {
-	// Step 1: Fetch all contribution limits
+func calculateCumulativeContribution(accountID string, accountTypeID int, userID int, birthYear int) error {
 
-	limitQuery := "SELECT year, contribute_limit FROM contribution_limit WHERE account_type_id = 1"
-	limitRows, err := db.DB.Query(limitQuery)
+	// Step 1: Fetch user salary
+
+	salaryRows, err := db.DB.Query(`SELECT year, amount FROM salary WHERE user_id = ?`, userID)
 	if err != nil {
 		return err
 	}
-
-	contributionLimits := make(map[int]float64)
-	for limitRows.Next() {
+	defer salaryRows.Close()
+	salary := make(map[int]float64)
+	for salaryRows.Next() {
 		var year int
 		var amount float64
-		if err := limitRows.Scan(&year, &amount); err != nil {
+		if err := salaryRows.Scan(&year, &amount); err != nil {
 			return err
 		}
-		contributionLimits[year] = amount
+		salary[year] = amount
 	}
 
-	// Step 2: Fetch all contributions for account
-	contributionQuery := "SELECT year, amount FROM contributions WHERE account_id = ?"
-	contributionRows, err := db.DB.Query(contributionQuery, accountID)
+	// Step 2: Fetch contribution limits
+	contributionLimits := make(map[int]float64)
+	if accountTypeID == 1 { // TFSA
+		rows, err := db.DB.Query(`SELECT year, contribute_limit FROM contribution_limit WHERE account_type_id = 1`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var year int
+			var limit float64
+			if err := rows.Scan(&year, &limit); err != nil {
+				return err
+			}
+			contributionLimits[year] = limit
+		}
+	} else if accountTypeID == 3 { // RRSP
+		rows, err := db.DB.Query(`SELECT year, rrsp_limit FROM rrsp_cap WHERE account_type_id = 3`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var year int
+			var cap float64
+			if err := rows.Scan(&year, &cap); err != nil {
+				return err
+			}
+			salaryAmount := salary[year]
+			contributionLimits[year] = math.Min(cap, salaryAmount*0.18)
+		}
+	}
+
+	// Step 3: Fetch contributions
+	contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
 	if err != nil {
 		return err
 	}
+	defer contributionRows.Close()
+
 	contributions := make(map[int]float64)
 	for contributionRows.Next() {
 		var year int
@@ -226,50 +281,83 @@ func calculateCumulativeContribution(accountID string) error {
 		contributions[year] = amount
 	}
 
-	// Step 3: Calculate cumulative and track over-contributions
+	// Step 4: Collect all years to process
+	allYears := map[int]struct{}{}
+	for y := range salary {
+		allYears[y] = struct{}{}
+	}
+	for y := range contributionLimits {
+		allYears[y] = struct{}{}
+	}
+	for y := range contributions {
+		allYears[y] = struct{}{}
+	}
+	years := make([]int, 0, len(allYears))
+	for y := range allYears {
+		years = append(years, y)
+	}
+	sort.Ints(years)
+
+	// Step 5: Compute cumulative room
 	cumulative := make(map[int]float64)
 	overContributions := make(map[int]float64)
+	var previous float64 = 0
 
-	for year := 2024; year <= 2025; year++ {
-		var prevCumulative float64
-		if year > 2024 {
-			prevCumulative = cumulative[year-1]
-		}
+	startYear := getStartYear(accountTypeID, birthYear)
+
+	for year := startYear; year <= 2025; year++ {
 		limit := contributionLimits[year]
-		contribution := contributions[year]
+		actual := contributions[year]
 
-		newCumulative := prevCumulative + (limit - contribution)
-		cumulative[year] = newCumulative
+		newRoom := previous + limit - actual
 
-		if contribution > prevCumulative+limit {
-			overContributions[year] = contribution - (prevCumulative + limit)
+		if newRoom < 0 {
+			overContributions[year] = -newRoom
+			cumulative[year] = 0
 		} else {
 			overContributions[year] = 0
+			cumulative[year] = newRoom
 		}
-		if cumulative[year] < 0 {
-			cumulative[year] = contribution + cumulative[year]
-		}
+		// fmt.Println(limit, actual, cumulative[year], year, accountID, accountTypeID)
+
+		previous = cumulative[year]
 	}
 
+	// Step 6: Upsert cumulative_contributions
 	tx, err := db.DB.Begin()
 	if err != nil {
+
 		return err
 	}
-	stmt, err := tx.Prepare("UPDATE cumulative_contributions SET amount = ?, over_contribution_amount = ? WHERE account_id = ? AND year = ?")
+	stmt, err := tx.Prepare(`
+		UPDATE cumulative_contributions
+			SET amount = ?, over_contribution_amount = ?
+			WHERE account_id = ? AND year = ?
+	`)
+
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	defer stmt.Close()
 
-	for year := 2024; year <= 2025; year++ {
-		_, err := stmt.Exec(cumulative[year], overContributions[year], accountID, year)
+	for year := startYear; year <= 2025; year++ {
+		fmt.Println(accountID, "<--")
+		fmt.Println(cumulative[year], overContributions[year], accountID, year)
+		res, err := stmt.Exec(cumulative[year], overContributions[year], accountID, year)
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
+		affected, _ := res.RowsAffected()
+		fmt.Printf("Year %d: updated %d rows\n", year, affected)
 	}
-
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		fmt.Println("THIS FUCKING RETARED ERROR")
+		return err
+	}
+	return nil
 }
 
 func calculateGrantContribution(accountID string, oldValue float64, newValue float64) error {
@@ -299,4 +387,18 @@ func calculateGrantContribution(accountID string, oldValue float64, newValue flo
 	}
 
 	return nil
+}
+
+func getStartYear(accountTypeID int, birthYear int) int {
+	const tfsaStart = 2009
+	userAdultYear := birthYear + 18
+
+	if accountTypeID == 1 { // TFSA
+		if userAdultYear > tfsaStart {
+			return userAdultYear
+		}
+		return tfsaStart
+	}
+
+	return userAdultYear // RRSP (or RESP/others if needed)
 }

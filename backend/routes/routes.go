@@ -20,5 +20,8 @@ func SetupRoutes(router *gin.Engine) {
 	// Contribution routes
 	router.POST("accounts/contribution/:id", middleware.Authentication, controllers.UpdateContribution)
 	router.GET("accounts/contribution/:id", middleware.Authentication, controllers.GetContributions)
+	// Salary routes
+	router.POST("/salary", middleware.Authentication, controllers.UpdateSalary)
+	router.GET("/salary", middleware.Authentication, controllers.GetSalaries)
 
 }

@@ -23,6 +23,7 @@ type Account struct {
 
 type Contribution struct {
 	Id         int     `json:"id"`
+	User_id    int     `json:"user_id"`
 	Account_id int     `json:"account_id"`
 	Amount     float64 `json:"amount"`
 	Year       int     `json:"year"`
@@ -49,11 +50,10 @@ type GrantCumulative struct {
 }
 
 type Salary struct {
-	Id         int     `json:"id"`
-	User_id    int     `json:"user_id"`
-	Amount     float64 `json:"amount"`
-	Start_year int     `json:"start_year"`
-	End_year   int     `json:"end_year"`
+	Id      int     `json:"id"`
+	User_id int     `json:"user_id"`
+	Amount  float64 `json:"amount"`
+	Year    int     `json:"year"`
 }
 
 func CreateUserTable(DB *sql.DB) {
@@ -96,6 +96,7 @@ func CreateContributionTable(DB *sql.DB) {
 	_, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS contributions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
 			account_id INTEGER REFERENCES accounts(id),
 			amount REAL NOT NULL,
 			year INTEGER NOT NULL
@@ -126,8 +127,8 @@ func CreateSalaryTable(DB *sql.DB) {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER REFERENCES users(id),
 			amount REAL NOT NULL,
-			start_year INTEGER NOT NULL,
-			end_year INTEGER
+			year INTEGER NOT NULL
+
 		);
 	`)
 	if err != nil {
