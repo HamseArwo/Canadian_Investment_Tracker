@@ -48,8 +48,9 @@ func Signup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create user"})
 		return
 	}
+	userId, _ := result.LastInsertId()
 
-	fmt.Println(result)
+	err = CreateSalary(userId, user.Birthyear)
 
 	c.JSON(http.StatusOK, gin.H{"message": "User created successfully"})
 
@@ -72,6 +73,7 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
 		return
 	}
+	defer rows.Close()
 	var user2 = new(models.User)
 
 	for rows.Next() {
