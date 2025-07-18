@@ -26,10 +26,8 @@ func CreateContribution(account models.Account, user models.User) error {
 			return err
 		}
 
-	} else if account.Account_type_id == 1 {
-		start_year = max(user.Birthyear+18, 2005)
 	} else {
-		start_year = user.Birthyear + 18
+		start_year = getStartYear(account.Account_type_id, user.Birthyear)
 	}
 
 	for start_year < 2026 {
