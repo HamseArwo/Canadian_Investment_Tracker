@@ -7,7 +7,7 @@ import (
 	"investment_tracker/models"
 	"math"
 	"net/http"
-	"sort"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,7 +50,7 @@ func CreateContribution(account models.Account, user models.User) error {
 
 	}
 	if account.Account_type_id == 1 || account.Account_type_id == 3 {
-		err := calculateCumulativeContribution(string(account.Id), account.Account_type_id, user.Id, user.Birthyear)
+		err := calculateCumulativeContribution(strconv.Itoa(account.Id), account.Account_type_id, user.Id, user.Birthyear)
 		if err != nil {
 			return err
 		}
@@ -111,7 +111,7 @@ func UpdateContribution(c *gin.Context) {
 	defer rows.Close()
 
 	for rows.Next() {
-		rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total, &account.Child_year)
+		err = rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total, &account.Child_year)
 	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
@@ -212,8 +212,6 @@ func getContributionCumulative(accountId int, year int) (float64, error) {
 
 func calculateCumulativeContribution(accountID string, accountTypeID int, userID int, birthYear int) error {
 
-	// Step 1: Fetch user salary
-
 	salaryRows, err := db.DB.Query(`SELECT year, amount FROM salary WHERE user_id = ?`, userID)
 	if err != nil {
 		return err
@@ -229,7 +227,6 @@ func calculateCumulativeContribution(accountID string, accountTypeID int, userID
 		salary[year] = amount
 	}
 
-	// Step 2: Fetch contribution limits
 	contributionLimits := make(map[int]float64)
 	if accountTypeID == 1 { // TFSA
 		rows, err := db.DB.Query(`SELECT year, contribute_limit FROM contribution_limit WHERE account_type_id = 1`)
@@ -262,7 +259,6 @@ func calculateCumulativeContribution(accountID string, accountTypeID int, userID
 		}
 	}
 
-	// Step 3: Fetch contributions
 	contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
 	if err != nil {
 		return err
@@ -279,24 +275,6 @@ func calculateCumulativeContribution(accountID string, accountTypeID int, userID
 		contributions[year] = amount
 	}
 
-	// Step 4: Collect all years to process
-	allYears := map[int]struct{}{}
-	for y := range salary {
-		allYears[y] = struct{}{}
-	}
-	for y := range contributionLimits {
-		allYears[y] = struct{}{}
-	}
-	for y := range contributions {
-		allYears[y] = struct{}{}
-	}
-	years := make([]int, 0, len(allYears))
-	for y := range allYears {
-		years = append(years, y)
-	}
-	sort.Ints(years)
-
-	// Step 5: Compute cumulative room
 	cumulative := make(map[int]float64)
 	overContributions := make(map[int]float64)
 	var previous float64 = 0
