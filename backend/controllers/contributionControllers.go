@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
@@ -211,68 +212,95 @@ func getContributionCumulative(accountId int, year int) (float64, error) {
 }
 
 func calculateCumulativeContribution(accountID string, accountTypeID int, userID int, birthYear int) error {
-
+	errChan := make(chan error, 4)
+	salary := make(map[int]float64)
+	contributionLimits := make(map[int]float64)
+	contributions := make(map[int]float64)
+	var wg sync.WaitGroup
 	salaryRows, err := db.DB.Query(`SELECT year, amount FROM salary WHERE user_id = ?`, userID)
 	if err != nil {
 		return err
 	}
 	defer salaryRows.Close()
-	salary := make(map[int]float64)
 	for salaryRows.Next() {
 		var year int
 		var amount float64
-		if err := salaryRows.Scan(&year, &amount); err != nil {
+		err := salaryRows.Scan(&year, &amount)
+		if err != nil {
 			return err
 		}
 		salary[year] = amount
 	}
 
-	contributionLimits := make(map[int]float64)
-	if accountTypeID == 1 { // TFSA
-		rows, err := db.DB.Query(`SELECT year, contribute_limit FROM contribution_limit WHERE account_type_id = 1`)
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		if accountTypeID == 1 { // TFSA
+			rows, err := db.DB.Query(`SELECT year, contribute_limit FROM contribution_limit WHERE account_type_id = 1`)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var year int
+				var limit float64
+				err := rows.Scan(&year, &limit)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				contributionLimits[year] = limit
+			}
+		} else if accountTypeID == 3 { // RRSP
+			rows, err := db.DB.Query(`SELECT year, rrsp_limit FROM rrsp_cap WHERE account_type_id = 3`)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var year int
+				var cap float64
+				err := rows.Scan(&year, &cap)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				salaryAmount := salary[year]
+				contributionLimits[year] = math.Min(cap, salaryAmount*0.18)
+			}
+		}
+	}()
+
+	go func() {
+		contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		defer contributionRows.Close()
+		defer wg.Done()
+
+		for contributionRows.Next() {
+			var year int
+			var amount float64
+			err := contributionRows.Scan(&year, &amount)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			contributions[year] = amount
+		}
+	}()
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var year int
-			var limit float64
-			if err := rows.Scan(&year, &limit); err != nil {
-				return err
-			}
-			contributionLimits[year] = limit
-		}
-	} else if accountTypeID == 3 { // RRSP
-		rows, err := db.DB.Query(`SELECT year, rrsp_limit FROM rrsp_cap WHERE account_type_id = 3`)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var year int
-			var cap float64
-			if err := rows.Scan(&year, &cap); err != nil {
-				return err
-			}
-			salaryAmount := salary[year]
-			contributionLimits[year] = math.Min(cap, salaryAmount*0.18)
-		}
-	}
-
-	contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
-	if err != nil {
-		return err
-	}
-	defer contributionRows.Close()
-
-	contributions := make(map[int]float64)
-	for contributionRows.Next() {
-		var year int
-		var amount float64
-		if err := contributionRows.Scan(&year, &amount); err != nil {
-			return err
-		}
-		contributions[year] = amount
 	}
 
 	cumulative := make(map[int]float64)
