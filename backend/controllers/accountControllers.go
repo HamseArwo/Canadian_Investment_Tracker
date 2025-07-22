@@ -24,9 +24,9 @@ func GetAccounts(c *gin.Context) {
 
 	for rows.Next() {
 		var account models.Account
-		err := rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total, &account.Child_year)
+		err := rows.Scan(&account.Id, &account.UserId, &account.AccountTypeId, &account.Total, &account.ChildYear)
 		if err != nil {
-			c.JSON(500, gin.H{"error": account.Child_year})
+			c.JSON(500, gin.H{"error": account.ChildYear})
 			return
 		}
 		accountList = append(accountList, account)
@@ -54,7 +54,7 @@ func GetAccount(c *gin.Context) {
 	defer rows.Close()
 
 	for rows.Next() {
-		rows.Scan(&account.Id, &account.User_id, &account.Account_type_id, &account.Total)
+		rows.Scan(&account.Id, &account.UserId, &account.AccountTypeId, &account.Total, &account.ChildYear)
 	}
 
 	if account.Id == 0 {
@@ -79,7 +79,7 @@ func CreateAccount(c *gin.Context) {
 		return
 	}
 	statement, _ := db.DB.Prepare("INSERT INTO accounts (user_id,account_type_id,total,child_year) VALUES (?, ?, ?, ?)")
-	result, err := statement.Exec(userID, account.Account_type_id, account.Total, account.Child_year)
+	result, err := statement.Exec(userID, account.AccountTypeId, account.Total, account.ChildYear)
 	accountID, _ := result.LastInsertId()
 	account.Id = int(accountID)
 

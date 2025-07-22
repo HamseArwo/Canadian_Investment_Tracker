@@ -14,46 +14,48 @@ type User struct {
 }
 
 type Account struct {
-	Id              int     `json:"id"`
-	User_id         int     `json:"user_id"`
-	Account_type_id int     `json:"account_type_id"`
-	Total           float64 `json:"total"`
-	Child_year      int     `json:"child_year"`
+	Id            int     `json:"id"`
+	UserId        int     `json:"user_id"`
+	AccountTypeId int     `json:"account_type_id"`
+	Total         float64 `json:"total"`
+	ChildYear     int     `json:"child_year"`
 }
 
 type Contribution struct {
-	Id         int     `json:"id"`
-	User_id    int     `json:"user_id"`
-	Account_id int     `json:"account_id"`
-	Amount     float64 `json:"amount"`
-	Year       int     `json:"year"`
+	Id        int     `json:"id"`
+	UserId    int     `json:"user_id"`
+	AccountId int     `json:"account_id"`
+	Amount    float64 `json:"amount"`
+	Year      int     `json:"year"`
 }
+
 type CumulativeContribution struct {
-	Id                       int     `json:"id"`
-	Account_id               int     `json:"account_id"`
-	Amount                   float64 `json:"amount"`
-	Year                     int     `json:"year"`
-	Over_contribution_amount float64 `json:"over_contribution_amount"`
+	Id                     int     `json:"id"`
+	AccountId              int     `json:"account_id"`
+	Amount                 float64 `json:"amount"`
+	Year                   int     `json:"year"`
+	OverContributionAmount float64 `json:"over_contribution_amount"`
 }
+
 type ContributionLimit struct {
-	Id              int     `json:"id"`
-	Account_type_id int     `json:"account_type_id"`
-	Amount          float64 `json:"amount"`
-	Year            int     `json:"year"`
+	Id            int     `json:"id"`
+	AccountTypeId int     `json:"account_type_id"`
+	Amount        float64 `json:"amount"`
+	Year          int     `json:"year"`
 }
 
 type GrantCumulative struct {
-	Id           int `json:"id"`
-	Account_id   int `json:"account_id"`
-	Grant_earned int `json:"grant_earned"`
-	Grant_unused int `json:"grant_unused"`
+	Id          int `json:"id"`
+	AccountId   int `json:"account_id"`
+	GrantEarned int `json:"grant_earned"`
+	GrantUnused int `json:"grant_unused"`
 }
 
 type Salary struct {
-	Id      int     `json:"id"`
-	User_id int     `json:"user_id"`
-	Amount  float64 `json:"amount"`
-	Year    int     `json:"year"`
+	Id     int     `json:"id"`
+	UserId int     `json:"user_id"`
+	Amount float64 `json:"amount"`
+	Year   int     `json:"year"`
 }
 
 func CreateUserTable(DB *sql.DB) {
