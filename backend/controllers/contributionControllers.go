@@ -87,9 +87,6 @@ func GetContributions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"Contributions": contributionList})
 }
 
-func DeleteContribution(c *gin.Context) {
-}
-
 func UpdateContribution(c *gin.Context) {
 	var contri = new(models.Contribution)
 	var account models.Account
