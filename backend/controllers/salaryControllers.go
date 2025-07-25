@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	calculator "investment_tracker/Calculator"
 	db "investment_tracker/database"
 	"net/http"
 	"strconv"
@@ -58,7 +59,7 @@ func UpdateSalary(c *gin.Context) {
 
 	// Step 2: Now call the function one-by-one
 	for _, accountID := range accountIDs {
-		err := calculateCumulativeContribution(strconv.Itoa(accountID), 3, userID, birthYear)
+		err := calculator.CalculateCumulativeContribution(strconv.Itoa(accountID), 3, userID, birthYear)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Failed to update cumulative contributions")
 			return
@@ -77,7 +78,7 @@ func GetSalaries(c *gin.Context) {
 	rows, _ := db.DB.Query("SELECT * FROM salary WHERE user_id = ?", userID)
 	defer rows.Close()
 	for rows.Next() {
-		err := rows.Scan(&salary.Id, &salary.User_id, &salary.Amount, &salary.Year)
+		err := rows.Scan(&salary.Id, &salary.UserId, &salary.Amount, &salary.Year)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, "Failed to fetch salaries")
 		}

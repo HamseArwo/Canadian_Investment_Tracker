@@ -41,9 +41,8 @@ func Signup(c *gin.Context) {
 	// Create the user
 	// Response
 
-	statement, _ := db.DB.Prepare("INSERT INTO users (name, email,password ,birthyear) VALUES (?, ?, ?, ?)")
+	result, err := db.DB.Exec("INSERT INTO users (name, email,password ,birthyear) VALUES (?, ?, ?, ?)", user.Name, user.Email, user.Password, user.Birthyear)
 
-	result, err := statement.Exec(user.Name, user.Email, user.Password, user.Birthyear)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create user"})
 		return
@@ -67,8 +66,7 @@ func Login(c *gin.Context) {
 
 	// Look up requested user
 
-	statement, _ := db.DB.Prepare("SELECT * FROM users WHERE email = ?")
-	rows, err := statement.Query(user.Email)
+	rows, err := db.DB.Query("SELECT * FROM users WHERE email = ?", user.Email)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
 		return
