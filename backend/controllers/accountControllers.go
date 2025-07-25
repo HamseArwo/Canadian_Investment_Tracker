@@ -13,8 +13,7 @@ func GetAccounts(c *gin.Context) {
 	// Implementation goes here
 	user, _ := c.Get("user")
 	userID := user.(*models.User).Id
-	statement, _ := db.DB.Prepare("SELECT * FROM accounts WHERE user_id = ?")
-	rows, err := statement.Query(userID)
+	rows, err := db.DB.Query("SELECT * FROM accounts WHERE user_id = ?", userID)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to query accounts"})
 		return
@@ -43,12 +42,13 @@ func GetAccounts(c *gin.Context) {
 func GetAccount(c *gin.Context) {
 	// Implementation goes here
 	var account = new(models.Account)
+	user, _ := c.Get("user")
+	userID := user.(*models.User).Id
 	id := c.Param("id")
-	statement, _ := db.DB.Prepare("SELECT * FROM accounts WHERE id = ?")
-	rows, err := statement.Query(id)
+	rows, err := db.DB.Query("SELECT * FROM accounts WHERE id = ? AND user_id = ?", id, userID)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, "Query failed")
+		c.JSON(http.StatusNotFound, "Account not found")
 		return
 	}
 	defer rows.Close()
@@ -78,18 +78,24 @@ func CreateAccount(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Failed to receive account"})
 		return
 	}
-	statement, _ := db.DB.Prepare("INSERT INTO accounts (user_id,account_type_id,total,child_year) VALUES (?, ?, ?, ?)")
-	result, err := statement.Exec(userID, account.AccountTypeId, account.Total, account.ChildYear)
-	accountID, _ := result.LastInsertId()
-	account.Id = int(accountID)
+	if account.AccountTypeId == 2 && (account.ChildYear == 0 || 2025-account.ChildYear > 31) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Child year is required for child account"})
+		return
+	}
+
+	result, err := db.DB.Exec("INSERT INTO accounts (user_id,account_type_id,total,child_year) VALUES (?, ?, ?, ?)", userID, account.AccountTypeId, account.Total, account.ChildYear)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create account"})
 		return
 	}
+	accountID, _ := result.LastInsertId()
+	account.Id = int(accountID)
+
 	err = CreateContribution(*account, *user.(*models.User))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, "Failed to create contributions")
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create contributions"})
 		return
 	}
 
@@ -100,11 +106,17 @@ func CreateAccount(c *gin.Context) {
 func DeleteAccount(c *gin.Context) {
 	// Implementation goes here
 	id := c.Param("id")
+	user, _ := c.Get("user")
+	userID := user.(*models.User).Id
 	var accountType int
 	var err2 error = nil
 	var err3 error = nil
 
-	db.DB.QueryRow("SELECT account_type_id FROM accounts WHERE id = ?", id).Scan(&accountType)
+	err := db.DB.QueryRow("SELECT account_type_id FROM accounts WHERE id = ? AND user_id = ?", id, userID).Scan(&accountType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
 	_, err1 := db.DB.Exec("DELETE FROM contributions WHERE account_id = ?", id)
 
 	if accountType == 2 {
@@ -117,7 +129,7 @@ func DeleteAccount(c *gin.Context) {
 	_, err4 := db.DB.Exec("DELETE FROM accounts WHERE id = ?", id)
 
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-		c.JSON(http.StatusNotFound, "Query failed")
+		c.JSON(http.StatusInternalServerError, "Internal server error")
 		return
 	}
 

@@ -144,7 +144,8 @@ func CreateCumulativeGrantTable(DB *sql.DB) {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			account_id INTEGER REFERENCES accounts(id),
 			grant_earned REAL NOT NULL,
-			grant_unused REAL NOT NULL
+			grant_unused REAL NOT NULL,
+			year INTEGER NOT NULL
 		);
 	`)
 	if err != nil {

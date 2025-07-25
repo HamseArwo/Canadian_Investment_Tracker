@@ -11,7 +11,7 @@ import (
 
 func ValidateContribution(contribution *models.Contribution, account *models.Account) error {
 
-	//  TFSA Calculations
+	//  TFSA && RRSP Calculations
 	if account.AccountTypeId == 1 || account.AccountTypeId == 3 {
 		oldValue := 0.0
 
@@ -37,7 +37,6 @@ func ValidateContribution(contribution *models.Contribution, account *models.Acc
 			return err
 		}
 
-		// RRSP CALCULATION
 	}
 	return nil
 
@@ -150,6 +149,7 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 	var previous float64 = 0
 
 	startYear := GetStartYear(accountTypeID, birthYear)
+	fmt.Println(startYear)
 
 	for year := startYear; year <= 2025; year++ {
 		limit := contributionLimits[year]
@@ -206,33 +206,85 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 	return nil
 }
 
-func CalculateGrantContribution(accountID string, oldValue float64, newValue float64) error {
-	// grantUsed := db.DB.QueryRow("SELECT grant_unused FROM cumulative_grants WHERE account_id = ?", accountID)
-	var grantEarned float64
-	var grantUnused float64
-	oldGrantEarned := min(500, oldValue*0.20)
-	newGrantEarned := min(500, newValue*0.20)
-	fmt.Println(oldGrantEarned, newGrantEarned)
+func CalculateGrantContribution(accountID string, newValue float64, contributionYear int, childYear int) error {
+	grants := make(map[int]float64)
+	contributions := make(map[int]float64)
+	grantEarned := 0.0
 
-	oldGrantUnused := 500 - oldGrantEarned
-	newGrantUnused := 500 - newGrantEarned
-	fmt.Println(oldGrantUnused, newGrantUnused)
-
-	err1 := db.DB.QueryRow("SELECT grant_earned FROM cumulative_grants WHERE account_id = ?", accountID).Scan(&grantEarned)
-	err2 := db.DB.QueryRow("SELECT grant_unused FROM cumulative_grants WHERE account_id = ?", accountID).Scan(&grantUnused)
-	if err1 != nil || err2 != nil {
-		return err1
-	}
-	fmt.Println(grantEarned, grantUnused)
-	grantEarned = grantEarned - oldGrantEarned + newGrantEarned
-	grantUnused = grantUnused - oldGrantUnused + newGrantUnused
-
-	_, err := db.DB.Exec("UPDATE cumulative_grants SET grant_earned = ?, grant_unused = ? WHERE account_id = ?", grantEarned, grantUnused, accountID)
+	contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
 	if err != nil {
+		fmt.Println("HERE")
 		return err
 	}
+	defer contributionRows.Close()
+	for contributionRows.Next() {
+		var year int
+		var amount float64
+		err := contributionRows.Scan(&year, &amount)
+		if err != nil {
+			fmt.Println("OR HERE")
+			return err
+		}
+		if year == contributionYear {
+			contributions[year] = min(500, newValue*0.2)
+		} else {
+			contributions[year] = min(500, amount*0.2)
 
+		}
+
+	}
+
+	for year := childYear; year <= 2025; year++ {
+		grantEarned += contributions[year]
+		fmt.Println("------", grantEarned)
+		if grantEarned >= 7200 {
+			break
+		} else if grantEarned+contributions[year] >= 7200 {
+			grants[year] = 7200 - grantEarned
+		} else {
+			grants[year] = contributions[year]
+		}
+
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		fmt.Println("OR HERE2")
+
+		return err
+	}
+	stmt, err := tx.Prepare(`
+		UPDATE cumulative_grants
+			SET grant_earned = ?
+			WHERE account_id = ? AND year = ?
+	`)
+
+	if err != nil {
+		fmt.Println("OR HERE3")
+
+		tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+
+	for year := childYear; year <= 2025; year++ {
+		fmt.Println(accountID, "<--")
+		fmt.Println(grants[year], accountID, year)
+		res, err := stmt.Exec(grants[year], accountID, year)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		affected, _ := res.RowsAffected()
+		fmt.Printf("Year %d: updated %d rows\n", year, affected)
+	}
+	err = tx.Commit()
+	if err != nil {
+		fmt.Println("HERE!!!")
+		return err
+	}
 	return nil
+
 }
 
 func GetStartYear(accountTypeID int, birthYear int) int {
@@ -246,5 +298,5 @@ func GetStartYear(accountTypeID int, birthYear int) int {
 		return tfsaStart
 	}
 
-	return userAdultYear // RRSP (or RESP/others if needed)
+	return userAdultYear // RRSP
 }
