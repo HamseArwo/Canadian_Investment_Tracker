@@ -164,12 +164,10 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 			overContributions[year] = 0
 			cumulative[year] = newRoom
 		}
-		// fmt.Println(limit, actual, cumulative[year], year, accountID, accountTypeID)
 
 		previous = cumulative[year]
 	}
 
-	// Step 6: Upsert cumulative_contributions
 	tx, err := db.DB.Begin()
 	if err != nil {
 
