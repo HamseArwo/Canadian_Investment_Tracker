@@ -1,6 +1,6 @@
 
 
-# 💰 Trackvestment Backend
+#  Trackvestment Backend
 
 ### Overview
 
@@ -11,7 +11,7 @@ The backend is built with **Go (Golang)** using the **Gin** web framework and us
 
 ---
 
-## ⚙️ Tech Stack
+## Tech Stack
 
 * **Language:** Go
 * **Framework:** Gin
@@ -20,7 +20,7 @@ The backend is built with **Go (Golang)** using the **Gin** web framework and us
 
 ---
 
-## 🧩 Features
+## Features
 
 * Create and manage users
 * Track TFSA, RRSP, and RESP accounts
@@ -33,7 +33,7 @@ The backend is built with **Go (Golang)** using the **Gin** web framework and us
 
 
 
-## 🗃️ Database Tables
+## atabase Tables
 
 * **users** – user info (name, email, password, birthyear)
 * **accounts** – user accounts (TFSA, RRSP, RESP)
@@ -44,7 +44,7 @@ The backend is built with **Go (Golang)** using the **Gin** web framework and us
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Requirements
 
