@@ -23,7 +23,6 @@ func ValidateContribution(contribution *models.Contribution, account *models.Acc
 
 		if contribution.Amount > cumulative_contributions+oldValue {
 			err := errors.New("Contribution limit exceeded")
-			fmt.Print(cumulative_contributions)
 			return err
 		} else if contribution.Amount == cumulative_contributions {
 
@@ -68,6 +67,7 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 		var amount float64
 		err := salaryRows.Scan(&year, &amount)
 		if err != nil {
+
 			return err
 		}
 		salary[year] = amount
@@ -89,6 +89,7 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 				var limit float64
 				err := rows.Scan(&year, &limit)
 				if err != nil {
+
 					errChan <- err
 					return
 				}
@@ -119,6 +120,7 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 		contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
 		if err != nil {
 			errChan <- err
+
 			return
 		}
 		defer contributionRows.Close()
@@ -149,7 +151,6 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 	var previous float64 = 0
 
 	startYear := GetStartYear(accountTypeID, birthYear)
-	fmt.Println(startYear)
 
 	for year := startYear; year <= 2025; year++ {
 		limit := contributionLimits[year]
@@ -170,7 +171,6 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-
 		return err
 	}
 	stmt, err := tx.Prepare(`
@@ -181,13 +181,12 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 
 	if err != nil {
 		tx.Rollback()
+
 		return err
 	}
 	defer stmt.Close()
 
 	for year := startYear; year <= 2025; year++ {
-		fmt.Println(accountID, "<--")
-		fmt.Println(cumulative[year], overContributions[year], accountID, year)
 		res, err := stmt.Exec(cumulative[year], overContributions[year], accountID, year)
 		if err != nil {
 			tx.Rollback()
@@ -198,7 +197,6 @@ func CalculateCumulativeContribution(accountID string, accountTypeID int, userID
 	}
 	err = tx.Commit()
 	if err != nil {
-		fmt.Println("THIS FUCKING RETARED ERROR")
 		return err
 	}
 	return nil
@@ -211,7 +209,6 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 
 	contributionRows, err := db.DB.Query(`SELECT year, amount FROM contributions WHERE account_id = ?`, accountID)
 	if err != nil {
-		fmt.Println("HERE")
 		return err
 	}
 	defer contributionRows.Close()
@@ -220,7 +217,6 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 		var amount float64
 		err := contributionRows.Scan(&year, &amount)
 		if err != nil {
-			fmt.Println("OR HERE")
 			return err
 		}
 		if year == contributionYear {
@@ -234,7 +230,6 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 
 	for year := childYear; year <= 2025; year++ {
 		grantEarned += contributions[year]
-		fmt.Println("------", grantEarned)
 		if grantEarned >= 7200 {
 			break
 		} else if grantEarned+contributions[year] >= 7200 {
@@ -247,7 +242,6 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		fmt.Println("OR HERE2")
 
 		return err
 	}
@@ -258,7 +252,6 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 	`)
 
 	if err != nil {
-		fmt.Println("OR HERE3")
 
 		tx.Rollback()
 		return err
@@ -266,8 +259,7 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 	defer stmt.Close()
 
 	for year := childYear; year <= 2025; year++ {
-		fmt.Println(accountID, "<--")
-		fmt.Println(grants[year], accountID, year)
+
 		res, err := stmt.Exec(grants[year], accountID, year)
 		if err != nil {
 			tx.Rollback()
@@ -278,7 +270,6 @@ func CalculateGrantContribution(accountID string, newValue float64, contribution
 	}
 	err = tx.Commit()
 	if err != nil {
-		fmt.Println("HERE!!!")
 		return err
 	}
 	return nil

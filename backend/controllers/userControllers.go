@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -16,7 +15,6 @@ import (
 )
 
 func Signup(c *gin.Context) {
-	fmt.Println(db.DB)
 
 	var user = new(models.User)
 
@@ -40,7 +38,6 @@ func Signup(c *gin.Context) {
 
 	// Create the user
 	// Response
-
 	result, err := db.DB.Exec("INSERT INTO users (name, email,password ,birthyear) VALUES (?, ?, ?, ?)", user.Name, user.Email, user.Password, user.Birthyear)
 
 	if err != nil {
@@ -110,7 +107,12 @@ func Logout(c *gin.Context) {
 	c.SetCookie("Authorization", "", -1, "", "", false, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
+func GetUser(c *gin.Context) {
+	user, _ := c.Get("user")
+	userName := user.(*models.User).Name
+	c.JSON(http.StatusOK, gin.H{"name": userName})
 
+}
 func Validate(c *gin.Context) {
 	user, _ := c.Get("user")
 

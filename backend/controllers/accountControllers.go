@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	db "investment_tracker/database"
 	"investment_tracker/models"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 )
 
 func GetAccounts(c *gin.Context) {
-	// Implementation goes here
 	user, _ := c.Get("user")
 	userID := user.(*models.User).Id
 	rows, err := db.DB.Query("SELECT * FROM accounts WHERE user_id = ?", userID)
@@ -23,9 +21,9 @@ func GetAccounts(c *gin.Context) {
 
 	for rows.Next() {
 		var account models.Account
-		err := rows.Scan(&account.Id, &account.UserId, &account.AccountTypeId, &account.Total, &account.ChildYear)
+		err := rows.Scan(&account.Id, &account.UserId, &account.Name, &account.AccountTypeId, &account.Total, &account.ChildYear)
 		if err != nil {
-			c.JSON(500, gin.H{"error": account.ChildYear})
+			c.JSON(500, gin.H{"error": account.Id})
 			return
 		}
 		accountList = append(accountList, account)
@@ -45,6 +43,7 @@ func GetAccount(c *gin.Context) {
 	user, _ := c.Get("user")
 	userID := user.(*models.User).Id
 	id := c.Param("id")
+
 	rows, err := db.DB.Query("SELECT * FROM accounts WHERE id = ? AND user_id = ?", id, userID)
 
 	if err != nil {
@@ -70,7 +69,6 @@ func CreateAccount(c *gin.Context) {
 	var account = new(models.Account)
 	user, _ := c.Get("user")
 	userID := user.(*models.User).Id
-	fmt.Println(userID)
 
 	err := c.BindJSON(account)
 
@@ -83,7 +81,7 @@ func CreateAccount(c *gin.Context) {
 		return
 	}
 
-	result, err := db.DB.Exec("INSERT INTO accounts (user_id,account_type_id,total,child_year) VALUES (?, ?, ?, ?)", userID, account.AccountTypeId, account.Total, account.ChildYear)
+	result, err := db.DB.Exec("INSERT INTO accounts (user_id,account_type_id,total,child_year,id,name) VALUES (?, ?, ?, ?, ?, ?)", userID, account.AccountTypeId, account.Total, account.ChildYear, account.Id, account.Name)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create account"})

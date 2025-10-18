@@ -13,6 +13,7 @@ import (
 
 func CreateSalary(userID int64, userBirthYear int) error {
 	for i := userBirthYear + 18; i <= 2025; i++ {
+
 		_, err := db.DB.Exec("INSERT INTO salary (user_id, amount , year) VALUES (?, ?, ?)", userID, 0, i)
 		if err != nil {
 			return err
@@ -57,7 +58,6 @@ func UpdateSalary(c *gin.Context) {
 		accountIDs = append(accountIDs, id)
 	}
 
-	// Step 2: Now call the function one-by-one
 	for _, accountID := range accountIDs {
 		err := calculator.CalculateCumulativeContribution(strconv.Itoa(accountID), 3, userID, birthYear)
 		if err != nil {

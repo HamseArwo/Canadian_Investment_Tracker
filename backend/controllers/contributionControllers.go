@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"errors"
-	"fmt"
 	calculator "investment_tracker/Calculator"
 	db "investment_tracker/database"
 	"investment_tracker/models"
@@ -26,24 +25,21 @@ func CreateContribution(account models.Account, user models.User) error {
 	}
 
 	for start_year < 2026 {
-		fmt.Println(account.Id, user.Id, start_year)
 		_, err := db.DB.Exec("INSERT INTO contributions (account_id,user_id,amount, year) VALUES (?, ?, ?, ?)", account.Id, user.Id, 0, start_year)
 
 		if err != nil {
-			fmt.Println("HERE?")
 
 			return err
 		}
 
 		if account.AccountTypeId == 1 || account.AccountTypeId == 3 {
-			_, err = db.DB.Exec("INSERT INTO cumulative_contributions (account_id, amount, year) VALUES (?, ?, ?)", account.Id, 0, start_year)
+			_, err = db.DB.Exec("INSERT INTO cumulative_contributions (account_id, user_id, amount, year) VALUES (?, ?, ?, ?)", account.Id, user.Id, 0, start_year)
 			if err != nil {
-				fmt.Println(account.AccountTypeId)
 
 				return err
 			}
 		} else if account.AccountTypeId == 2 {
-			_, err = db.DB.Exec("INSERT INTO cumulative_grants (account_id, grant_earned, grant_unused, year) VALUES (?, ?, ?, ?)", account.Id, 0, 0, start_year)
+			_, err = db.DB.Exec("INSERT INTO cumulative_grants (account_id, user_id, grant_earned, grant_unused, year) VALUES (?, ?, ?, ?, ?)", account.Id, user.Id, 0, 0, start_year)
 			if err != nil {
 
 				return err
@@ -88,6 +84,105 @@ func GetContributions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"Contributions": contributionList})
 }
+func GetCumulativeContribution(c *gin.Context) {
+	accountId := c.Param("id")
+	accountType, _ := strconv.Atoi(c.Param("type"))
+	user, _ := c.Get("user")
+	userID := user.(*models.User).Id
+	if accountType != 2 {
+		var cumulativeContributionList []models.CumulativeContribution
+
+		rows, err := db.DB.Query("SELECT * FROM cumulative_contributions WHERE account_id = ? AND user_id = ?", accountId, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
+			return
+		}
+
+		defer rows.Close()
+
+		for rows.Next() {
+			var cumulativeContribution models.CumulativeContribution
+			rows.Scan(&cumulativeContribution.Id, &cumulativeContribution.UserId, &cumulativeContribution.AccountId, &cumulativeContribution.Amount, &cumulativeContribution.Year, &cumulativeContribution.OverContributionAmount)
+			cumulativeContributionList = append(cumulativeContributionList, cumulativeContribution)
+		}
+		c.JSON(http.StatusOK, gin.H{"CumulativeContributions": cumulativeContributionList})
+
+	} else {
+		var grantCumulativeList []models.GrantCumulative
+
+		rows, err := db.DB.Query("SELECT * FROM cumulative_grants WHERE account_id = ? AND user_id = ?", accountId, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
+			return
+		}
+
+		defer rows.Close()
+
+		for rows.Next() {
+			var grantCumulative models.GrantCumulative
+			rows.Scan(&grantCumulative.Id, &grantCumulative.AccountId, &grantCumulative.UserId, &grantCumulative.GrantEarned, &grantCumulative.GrantUnused, &grantCumulative.Year)
+			grantCumulativeList = append(grantCumulativeList, grantCumulative)
+		}
+		c.JSON(http.StatusOK, gin.H{"GrantCumulative": grantCumulativeList})
+
+	}
+
+	// c.JSON(http.StatusOK, gin.H{"Contributions": contributionList})
+
+}
+func GetContributionsLimit(c *gin.Context) {
+	var ContributionLimitList []models.ContributionLimit
+	rows, err := db.DB.Query("SELECT * FROM contribution_limit")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ContributionLimit models.ContributionLimit
+
+		rows.Scan(&ContributionLimit.Id, &ContributionLimit.AccountTypeId, &ContributionLimit.Amount, &ContributionLimit.Year)
+		ContributionLimitList = append(ContributionLimitList, ContributionLimit)
+	}
+	c.JSON(http.StatusOK, gin.H{"ContributionLimit": ContributionLimitList})
+
+}
+func GetRRSPLimit(c *gin.Context) {
+	var rrspList []models.RRSPLimit
+	rrspLimits := map[int]float64{}
+	user, _ := c.Get("user")
+	userId := user.(*models.User).Id
+
+	rrspRow, err := db.DB.Query("SELECT rrsp_limit, year FROM rrsp_cap")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
+		return
+	}
+	defer rrspRow.Close()
+	for rrspRow.Next() {
+
+		var amount float64
+		var year int
+		rrspRow.Scan(&amount, &year)
+		rrspLimits[year] = amount
+	}
+	SalaryRow, err := db.DB.Query("SELECT year, amount FROM salary WHERE user_id = ?", userId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
+		return
+	}
+	defer SalaryRow.Close()
+	for SalaryRow.Next() {
+		var rrspLimit models.RRSPLimit
+		var salary models.Salary
+		SalaryRow.Scan(&salary.Year, &salary.Amount)
+
+		rrspLimit.Amount = min(salary.Amount*0.18, rrspLimits[salary.Year])
+		rrspLimit.Year = salary.Year
+		rrspList = append(rrspList, rrspLimit)
+	}
+	c.JSON(http.StatusOK, gin.H{"RrspLimit": rrspList})
+}
 
 func UpdateContribution(c *gin.Context) {
 	var contri = new(models.Contribution)
@@ -100,7 +195,6 @@ func UpdateContribution(c *gin.Context) {
 
 	accountId := c.Param("id")
 	err := c.BindJSON(contri)
-
 	rows, err := db.DB.Query("SELECT * FROM accounts WHERE id = ?", accountId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
@@ -109,10 +203,10 @@ func UpdateContribution(c *gin.Context) {
 	defer rows.Close()
 
 	for rows.Next() {
-		err = rows.Scan(&account.Id, &account.UserId, &account.AccountTypeId, &account.Total, &account.ChildYear)
+		err = rows.Scan(&account.Id, &account.UserId, &account.Name, &account.AccountTypeId, &account.Total, &account.ChildYear)
 	}
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": account})
 		return
 	}
 
@@ -125,7 +219,6 @@ func UpdateContribution(c *gin.Context) {
 
 	err = db.DB.QueryRow("SELECT amount FROM contributions WHERE year = ? AND account_id = ?", contri.Year, accountId).Scan(&oldValue)
 	if err != nil {
-		fmt.Println(":Hello")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request"})
 		return
 	}

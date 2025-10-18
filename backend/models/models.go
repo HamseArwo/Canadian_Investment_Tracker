@@ -15,6 +15,7 @@ type User struct {
 
 type Account struct {
 	Id            int     `json:"id"`
+	Name          string  `json:"name"`
 	UserId        int     `json:"user_id"`
 	AccountTypeId int     `json:"account_type_id"`
 	Total         float64 `json:"total"`
@@ -32,6 +33,7 @@ type Contribution struct {
 type CumulativeContribution struct {
 	Id                     int     `json:"id"`
 	AccountId              int     `json:"account_id"`
+	UserId                 int     `json:"user_id"`
 	Amount                 float64 `json:"amount"`
 	Year                   int     `json:"year"`
 	OverContributionAmount float64 `json:"over_contribution_amount"`
@@ -47,13 +49,20 @@ type ContributionLimit struct {
 type GrantCumulative struct {
 	Id          int `json:"id"`
 	AccountId   int `json:"account_id"`
+	UserId      int `json:"user_id"`
 	GrantEarned int `json:"grant_earned"`
 	GrantUnused int `json:"grant_unused"`
+	Year        int `json:"year"`
 }
 
 type Salary struct {
 	Id     int     `json:"id"`
 	UserId int     `json:"user_id"`
+	Amount float64 `json:"amount"`
+	Year   int     `json:"year"`
+}
+
+type RRSPLimit struct {
 	Amount float64 `json:"amount"`
 	Year   int     `json:"year"`
 }
@@ -79,8 +88,9 @@ func CreateUserTable(DB *sql.DB) {
 func CreateAccountTable(DB *sql.DB) {
 	_, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS accounts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			id INTEGER PRIMARY KEY,
 			user_id INTEGER NOT NULL REFERENCES users(id),
+			name TEXT NOT NULL,
 			account_type_id INTEGER REFERENCES account_types(id),
 			total REAL NOT NULL,
 			child_year INTEGER NOT NULL
@@ -114,8 +124,10 @@ func CreateCumulativeContributionTable(DB *sql.DB) {
 		CREATE TABLE IF NOT EXISTS cumulative_contributions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			account_id INTEGER REFERENCES accounts(id),
+			user_id INTEGER REFERENCES users(id),
 			amount REAL NOT NULL,
-			year INTEGER NOT NULL
+			year INTEGER NOT NULL,
+			over_contribution_amount FLOAT DEFAULT 0
 		);
 	`)
 	if err != nil {
@@ -143,6 +155,7 @@ func CreateCumulativeGrantTable(DB *sql.DB) {
 		CREATE TABLE IF NOT EXISTS cumulative_grants (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			account_id INTEGER REFERENCES accounts(id),
+			user_id INTEGER REFERENCES users(id),
 			grant_earned REAL NOT NULL,
 			grant_unused REAL NOT NULL,
 			year INTEGER NOT NULL
