@@ -103,7 +103,6 @@ func Login(c *gin.Context) {
 
 func Logout(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
-	// Deletes cookie by setting expiration time to -1
 	c.SetCookie("Authorization", "", -1, "", "", false, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
