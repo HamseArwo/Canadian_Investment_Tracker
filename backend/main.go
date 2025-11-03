@@ -1,7 +1,7 @@
 package main
 
 import (
-	"investment_tracker/initializer"
+
 	// "runtime/trace"
 
 	db "investment_tracker/database"
@@ -13,7 +13,7 @@ import (
 
 func init() {
 	db.InitDB()
-	initializer.LoadEnvVariables()
+	// initializer.LoadEnvVariables()
 
 }
 
