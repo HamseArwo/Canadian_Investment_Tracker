@@ -33,7 +33,7 @@ The backend is built with **Go (Golang)** using the **Gin** web framework and us
 
 
 
-## atabase Tables
+## Database Tables
 
 * **users** – user info (name, email, password, birthyear)
 * **accounts** – user accounts (TFSA, RRSP, RESP)
